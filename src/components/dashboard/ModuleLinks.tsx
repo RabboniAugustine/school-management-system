@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-const modules = [
+const modules: { label: string; path: string; permission: string | string[] }[] = [
   { label: "Academic calendar", path: "academics/years", permission: "academics.read" },
   { label: "Classes & streams", path: "academics/classes", permission: "classes.read" },
   { label: "Subjects", path: "academics/subjects", permission: "subjects.read" },
@@ -8,6 +8,15 @@ const modules = [
   { label: "Staff", path: "staff", permission: "staff.read" },
   { label: "Enrollments", path: "academics/enrollments", permission: "enrollments.read" },
   { label: "Attendance", path: "attendance", permission: "attendance.read" },
+  { label: "Timetable", path: "timetable", permission: "timetable.read" },
+  { label: "Grades & reports", path: "grades", permission: "grades.read" },
+  { label: "Fees & finance", path: "fees", permission: "fees.read" },
+  { label: "Library", path: "library", permission: "library.read" },
+  { label: "Communication", path: "communication", permission: "communication.read" },
+  { label: "HR & payroll", path: "hr", permission: ["hr.read", "payroll.read"] },
+  { label: "Reports", path: "reports", permission: "reports.read" },
+  { label: "My family", path: "portal", permission: "portal.read" },
+  { label: "Portal access", path: "portal/access", permission: "portal.manage" },
 ];
 
 export default function ModuleLinks({ slug, permissions }: {
@@ -15,7 +24,8 @@ export default function ModuleLinks({ slug, permissions }: {
   permissions: Set<string>;
 }) {
   const base = `/schools/${encodeURIComponent(slug)}`;
-  const visible = modules.filter((m) => permissions.has(m.permission));
+  const visible = modules.filter((m) =>
+    (Array.isArray(m.permission) ? m.permission : [m.permission]).some((p) => permissions.has(p)));
   return (
     <nav aria-label="School modules" className="flex flex-wrap gap-2 border-b border-slate-200 pb-5">
       <Link href={`${base}/dashboard`} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white">Dashboard</Link>
