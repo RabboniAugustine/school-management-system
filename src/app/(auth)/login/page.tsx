@@ -54,6 +54,13 @@ export default function LoginPage() {
   // FORM STATES
   // =====================================================
 
+  // Read the current year after hydration: Cache Components forbids new Date() during prerender.
+  const [year, setYear] = useState<number | null>(null);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setYear(new Date().getFullYear()), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   const [email, setEmail] = useState("");
 
   const [password, setPassword] = useState("");
@@ -394,7 +401,7 @@ export default function LoginPage() {
         {/* Footer */}
 
         <div className="relative z-10 text-sm text-blue-200/70">
-          © {new Date().getFullYear()} School Management System.
+          © {year ?? ""} School Management System.
           All rights reserved.
         </div>
 

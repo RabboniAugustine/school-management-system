@@ -13,7 +13,7 @@ const modules: { label: string; path: string; permission: string | string[] }[] 
   { label: "Fees & finance", path: "fees", permission: "fees.read" },
   { label: "Library", path: "library", permission: "library.read" },
   { label: "Communication", path: "communication", permission: "communication.read" },
-  { label: "HR & payroll", path: "hr", permission: ["hr.read", "payroll.read"] },
+  { label: "HR & payroll", path: "hr", permission: ["hr.read", "payroll.read", "leave.request"] },
   { label: "Reports", path: "reports", permission: "reports.read" },
   { label: "My family", path: "portal", permission: "portal.read" },
   { label: "Portal access", path: "portal/access", permission: "portal.manage" },

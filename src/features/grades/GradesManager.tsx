@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useRun } from "@/lib/useRun";
 import { dbMessage, esc, fmtDate, printHtml } from "@/lib/format";
 import { btn, btnLight, card, field, label, td, th } from "@/components/ui/styles";
 import Tabs from "@/components/ui/Tabs";
@@ -67,7 +68,7 @@ export default function GradesManager({ schoolId, schoolName, canManage }: { sch
     setTermId((cur) => cur || (termRows.find((r) => r.status === "active")?.id ?? termRows[0]?.id ?? ""));
     setClassId((cur) => cur || ((c.data ?? [])[0] as Cls | undefined)?.id || "");
   }, [db, schoolId]);
-  useEffect(() => { void loadBase(); }, [loadBase]);
+  useRun(loadBase);
 
   const loadClass = useCallback(async () => {
     if (!termId || !classId || !term) return;
@@ -93,17 +94,20 @@ export default function GradesManager({ schoolId, schoolName, canManage }: { sch
       setStudents((st.data ?? []) as Student[]);
     } else setStudents([]);
   }, [db, schoolId, termId, classId, term]);
-  useEffect(() => { void loadClass(); }, [loadClass]);
+  useRun(loadClass);
 
   // Load existing scores for the chosen assessment.
   useEffect(() => {
-    setScoreInputs({});
-    if (!assessmentId) return;
-    void db.from("scores").select("enrollment_id,score").eq("school_id", schoolId).eq("assessment_id", assessmentId).then(({ data }) => {
-      const map: Record<string, string> = {};
-      for (const r of (data ?? []) as { enrollment_id: string; score: number }[]) map[r.enrollment_id] = String(r.score);
-      setScoreInputs(map);
-    });
+    const timer = window.setTimeout(() => {
+      setScoreInputs({});
+      if (!assessmentId) return;
+      void db.from("scores").select("enrollment_id,score").eq("school_id", schoolId).eq("assessment_id", assessmentId).then(({ data }) => {
+        const map: Record<string, string> = {};
+        for (const r of (data ?? []) as { enrollment_id: string; score: number }[]) map[r.enrollment_id] = String(r.score);
+        setScoreInputs(map);
+      });
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [db, schoolId, assessmentId]);
 
   const studentOf = useCallback((enrollmentId: string) => {

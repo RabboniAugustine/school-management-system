@@ -1,7 +1,8 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useRun } from "@/lib/useRun";
 import { daysBetween, dbMessage, esc, fmtDate, ghs, printHtml, toPesewas, today } from "@/lib/format";
 import { btn, btnLight, card, field, label, td, th } from "@/components/ui/styles";
 import Tabs from "@/components/ui/Tabs";
@@ -21,6 +22,11 @@ type DbResult<T> = { error: { message?: string; code?: string } | null; data?: T
 const METHODS = [
   ["cash", "Cash"], ["mobile_money", "Mobile money"], ["bank", "Bank transfer"], ["card", "Card"], ["cheque", "Cheque"],
 ] as const;
+
+/** Receipt numbers are unique per school (database constraint); the random suffix avoids clashes between cashiers. */
+function newReceiptNumber(): string {
+  return `RCT-${today().replaceAll("-", "")}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+}
 
 export default function FeesManager({ schoolId, schoolName, canManage }: { schoolId: string; schoolName: string; canManage: boolean }) {
   const db = useMemo(() => createClient(), []);
@@ -64,7 +70,7 @@ export default function FeesManager({ schoolId, schoolName, canManage }: { schoo
     setBalances((b.data ?? []) as Balance[]); setExpenses((e.data ?? []) as Expense[]);
     setYearId((cur) => cur || (yearRows.find((r) => r.status === "active")?.id ?? yearRows[0]?.id ?? ""));
   }, [db, schoolId]);
-  useEffect(() => { void load(); }, [load]);
+  useRun(load);
 
   const studentName = useCallback((id: string) => {
     const s = students.find((x) => x.id === id);
@@ -118,7 +124,7 @@ export default function FeesManager({ schoolId, schoolName, canManage }: { schoo
     if (!amount) return setError("Enter a valid payment amount.");
     const outstanding = b.total_pesewas - b.paid_pesewas;
     if (amount > outstanding) return setError(`The payment is more than the balance of ${ghs(outstanding)}.`);
-    const receipt = `RCT-${today().replaceAll("-", "")}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+    const receipt = newReceiptNumber();
     const r = await run(() => db.from("payments").insert({
       school_id: schoolId, invoice_id: b.invoice_id, receipt_number: receipt, amount_pesewas: amount, method: pay.method,
       reference: pay.reference.trim() || null, paid_on: pay.paid_on,

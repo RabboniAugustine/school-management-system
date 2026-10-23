@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useRun } from "@/lib/useRun";
 import { dbMessage } from "@/lib/format";
 import { btn, btnLight, card, field, label } from "@/components/ui/styles";
 import Notice from "@/components/ui/Notice";
@@ -59,7 +60,7 @@ export default function TimetableManager({ schoolId, canManage }: { schoolId: st
     setYearId((cur) => cur || (yr.find((r) => r.status === "active")?.id ?? yr[0]?.id ?? ""));
     setClassId((cur) => cur || ((c.data ?? [])[0] as Cls | undefined)?.id || "");
   }, [db, schoolId]);
-  useEffect(() => { void load(); }, [load]);
+  useRun(load);
 
   const loadSlots = useCallback(async () => {
     if (!yearId) return;
@@ -67,7 +68,7 @@ export default function TimetableManager({ schoolId, canManage }: { schoolId: st
     if (e) return setError("Unable to load lessons.");
     setSlots((data ?? []) as Slot[]);
   }, [db, schoolId, yearId]);
-  useEffect(() => { void loadSlots(); }, [loadSlots]);
+  useRun(loadSlots);
 
   useEffect(() => {
     if (!classId) return;

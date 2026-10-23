@@ -124,14 +124,17 @@ INSERT INTO public.permissions(code,name,description) VALUES
  ('hr.read','View leave','View staff leave requests'),
  ('hr.manage','Manage leave','Approve or reject staff leave'),
  ('payroll.read','View payroll','View staff compensation and payslips'),
- ('payroll.manage','Manage payroll','Set compensation and run payroll')
+ ('payroll.manage','Manage payroll','Set compensation and run payroll'),
+ ('leave.request','Request own leave','File and cancel your own leave requests')
 ON CONFLICT(code) DO NOTHING;
 INSERT INTO public.role_permissions(role_id,permission_id)
 SELECT r.id,p.id FROM (VALUES
  ('proprietor','hr.read'),('proprietor','hr.manage'),('proprietor','payroll.read'),('proprietor','payroll.manage'),
  ('school_admin','hr.read'),('school_admin','hr.manage'),('school_admin','payroll.read'),('school_admin','payroll.manage'),
  ('head_teacher','hr.read'),('head_teacher','hr.manage'),
- ('bursar','payroll.read'),('bursar','payroll.manage')
+ ('bursar','payroll.read'),('bursar','payroll.manage'),
+ ('proprietor','leave.request'),('school_admin','leave.request'),('head_teacher','leave.request'),
+ ('teacher','leave.request'),('bursar','leave.request'),('librarian','leave.request')
 ) v(role_code,permission_code)
 JOIN public.roles r ON r.code=v.role_code JOIN public.permissions p ON p.code=v.permission_code
 ON CONFLICT(role_id,permission_id) DO NOTHING;

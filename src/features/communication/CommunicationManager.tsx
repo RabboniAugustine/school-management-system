@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useRun } from "@/lib/useRun";
 import { dbMessage, fmtDate, today } from "@/lib/format";
 import { btn, btnLight, card, field, label, td, th } from "@/components/ui/styles";
 import Tabs from "@/components/ui/Tabs";
@@ -34,7 +35,7 @@ export default function CommunicationManager({ schoolId, canManage }: { schoolId
     if (a.error || s.error) return setError("Unable to load messages.");
     setItems((a.data ?? []) as Announcement[]); setOutbox((s.data ?? []) as Sms[]);
   }, [db, schoolId]);
-  useEffect(() => { void load(); }, [load]);
+  useRun(load);
 
   async function act(fn: () => PromiseLike<{ error: { message?: string; code?: string } | null; data?: unknown }>, success: (data: unknown) => string) {
     setError(""); setOk(""); setBusy(true);
