@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRun } from "@/lib/useRun";
 import { dbMessage, esc, fmtDate, printHtml } from "@/lib/format";
+import { enqueue, isNetworkError } from "@/lib/offlineQueue";
+import { currentOwner } from "@/lib/offlineOwner";
 import { btn, btnLight, card, field, label, td, th } from "@/components/ui/styles";
 import Tabs from "@/components/ui/Tabs";
 import Notice from "@/components/ui/Notice";
@@ -159,7 +161,22 @@ export default function GradesManager({ schoolId, schoolName, canManage }: { sch
       rows.push({ school_id: schoolId, assessment_id: assessment.id, enrollment_id: e.id, score: n });
     }
     if (!rows.length) return setError("Enter at least one score.");
-    await run(() => db.from("scores").upsert(rows, { onConflict: "school_id,assessment_id,enrollment_id" }), `${rows.length} score(s) saved.`);
+    setError(""); setOk(""); setBusy(true);
+    const offlineNow = typeof navigator !== "undefined" && !navigator.onLine;
+    const res = offlineNow ? { error: { message: "Failed to fetch", code: undefined as string | undefined } } : await db.from("scores").upsert(rows, { onConflict: "school_id,assessment_id,enrollment_id" });
+    if (res.error && isNetworkError(res.error)) {
+      // No connection: keep the scores on this device and send them when back online.
+      const owner = await currentOwner(db);
+      setBusy(false);
+      if (!owner) return setError("You are offline and your sign-in could not be read. Reconnect and try again.");
+      await enqueue({ owner, schoolId, table: "scores", rows, onConflict: "school_id,assessment_id,enrollment_id", label: `Scores: ${assessment.name}` });
+      window.dispatchEvent(new Event("sms-offline-queued"));
+      return setOk(`${rows.length} score(s) saved on this device. They will sync when you are back online.`);
+    }
+    setBusy(false);
+    if (res.error) return setError(dbMessage(res.error));
+    setOk(`${rows.length} score(s) saved.`);
+    await loadClass();
   }
 
   async function openCard(enrollmentId: string) {

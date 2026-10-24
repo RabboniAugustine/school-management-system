@@ -1,0 +1,20 @@
+import { Suspense } from "react";
+import SchoolModuleFrame from "@/components/dashboard/SchoolModuleFrame";
+import { getSchoolModuleContext } from "@/lib/permissions/getSchoolModuleContext";
+import TransportManager from "@/features/transport/TransportManager";
+
+type Props = { params: Promise<{ slug: string }> };
+export default function Page({ params }: Props) {
+  return <Suspense fallback={<main className="p-8">Loading transport...</main>}><Content params={params} /></Suspense>;
+}
+async function Content({ params }: Props) {
+  const { slug } = await params;
+  const context = await getSchoolModuleContext(slug, "transport.read");
+  return (
+    <SchoolModuleFrame school={context.school} userEmail={context.user.email ?? "Authenticated User"}
+      roles={context.roles.map((role) => role.name)} permissions={context.permissions}
+      title="Transport" subtitle="Routes, vehicles and student transport.">
+      <TransportManager schoolId={context.school.id} canManage={context.permissions.has("transport.manage")} />
+    </SchoolModuleFrame>
+  );
+}

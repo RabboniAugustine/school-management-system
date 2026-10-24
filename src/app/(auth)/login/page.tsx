@@ -38,6 +38,7 @@ import {
 } from "react";
 
 import { createClient } from "@/lib/supabase/client";
+import { clearOfflineCaches } from "@/components/offline/OfflineStatus";
 
 /**
  * Main Login Component
@@ -224,6 +225,7 @@ export default function LoginPage() {
 
     try {
       const { error } = await supabase.auth.signOut();
+      await clearOfflineCaches();
 
       if (error) {
         throw error;

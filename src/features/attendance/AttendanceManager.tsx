@@ -8,6 +8,8 @@ import {
 } from "react";
 
 import { createClient } from "@/lib/supabase/client";
+import { enqueue, isNetworkError } from "@/lib/offlineQueue";
+import { currentOwner } from "@/lib/offlineOwner";
 
 type SchoolClass = {
   id: string;
@@ -238,6 +240,17 @@ export default function AttendanceManager({
     return () => window.clearTimeout(timer);
   }, [load]);
 
+  useEffect(() => {
+    const onSynced = () => {
+      void load();
+    };
+
+    window.addEventListener("sms-offline-synced", onSynced);
+
+    return () =>
+      window.removeEventListener("sms-offline-synced", onSynced);
+  }, [load]);
+
   const year = years.find(
     (item) => item.id === yearId
   );
@@ -262,20 +275,73 @@ export default function AttendanceManager({
       (item) => item.enrollment_id === enrollmentId
     );
 
-    const result = current
-      ? await db
-          .from("student_attendance")
-          .update({ status })
-          .eq("id", current.id)
-          .eq("school_id", schoolId)
-      : await db
-          .from("student_attendance")
-          .insert({
-            school_id: schoolId,
-            enrollment_id: enrollmentId,
-            school_day: day,
-            status,
-          });
+    const row = {
+      school_id: schoolId,
+      enrollment_id: enrollmentId,
+      school_day: day,
+      status,
+    };
+
+    const offlineNow =
+      typeof navigator !== "undefined" && !navigator.onLine;
+
+    const result = offlineNow
+      ? { error: { message: "Failed to fetch" } }
+      : current && !current.id.startsWith("local-")
+        ? await db
+            .from("student_attendance")
+            .update({ status })
+            .eq("id", current.id)
+            .eq("school_id", schoolId)
+        : await db
+            .from("student_attendance")
+            .upsert(row, {
+              onConflict: "school_id,enrollment_id,school_day",
+            });
+
+    if (result.error && isNetworkError(result.error)) {
+      // No connection: keep the mark on this device and sync it later.
+      const owner = await currentOwner(db);
+      setWorking(null);
+
+      if (!owner) {
+        setError("You are offline and your sign-in could not be read. Reconnect and try again.");
+        return;
+      }
+
+      await enqueue({
+        owner,
+        schoolId,
+        table: "student_attendance",
+        rows: [row],
+        onConflict: "school_id,enrollment_id,school_day",
+        label: `Attendance ${day}`,
+      });
+
+      window.dispatchEvent(new Event("sms-offline-queued"));
+
+      setAttendance((previous) =>
+        previous.some((item) => item.enrollment_id === enrollmentId)
+          ? previous.map((item) =>
+              item.enrollment_id === enrollmentId
+                ? { ...item, status }
+                : item
+            )
+          : [
+              ...previous,
+              {
+                id: `local-${enrollmentId}`,
+                enrollment_id: enrollmentId,
+                school_day: day,
+                status,
+                remarks: null,
+              } as Attendance,
+            ]
+      );
+
+      setNotice("Saved on this device. It will sync when you are back online.");
+      return;
+    }
 
     setWorking(null);
 
