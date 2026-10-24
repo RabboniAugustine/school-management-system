@@ -56,3 +56,28 @@ table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border:1px solid 
 <body>${bodyHtml}<p><button onclick="window.print()">Print</button></p></body></html>`);
   w.document.close();
 }
+
+/** Builds a CSV string. Text cells that start with = + - @ are prefixed so spreadsheets cannot run them as formulas. */
+export function toCsv(rows: (string | number | null | undefined)[][]): string {
+  const cell = (v: string | number | null | undefined) => {
+    if (v === null || v === undefined) return "";
+    let s = String(v);
+    if (typeof v === "string" && /^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  return rows.map((r) => r.map(cell).join(",")).join("\r\n");
+}
+
+/** Downloads text as a CSV file (UTF-8 with BOM so Excel shows names correctly). */
+export function downloadCsv(filename: string, rows: (string | number | null | undefined)[][]): void {
+  const blob = new Blob(["\uFEFF", toCsv(rows)], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+/** Pesewas as a plain decimal string for accounting files ("1250.50"). */
+export function money2(pesewas: number): string {
+  return (pesewas / 100).toFixed(2);
+}

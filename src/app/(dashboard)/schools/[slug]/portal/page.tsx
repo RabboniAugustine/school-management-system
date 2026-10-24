@@ -14,7 +14,7 @@ async function Content({ params }: Props) {
     <SchoolModuleFrame school={context.school} userEmail={context.user.email ?? "Authenticated User"}
       roles={context.roles.map((role) => role.name)} permissions={context.permissions}
       title="My family" subtitle="Attendance, fees, results and school notices for your linked students.">
-      <PortalView schoolId={context.school.id} />
+      <PortalView schoolId={context.school.id} slug={slug} />
     </SchoolModuleFrame>
   );
 }

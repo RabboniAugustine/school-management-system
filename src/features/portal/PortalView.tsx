@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useRun } from "@/lib/useRun";
-import { fmtDate, ghs } from "@/lib/format";
-import { card, field, label, td, th } from "@/components/ui/styles";
+import { fmtDate, ghs, toPesewas } from "@/lib/format";
+import { btn, btnLight, card, field, label, td, th } from "@/components/ui/styles";
 import Tabs from "@/components/ui/Tabs";
 import Notice from "@/components/ui/Notice";
 import Empty from "@/components/ui/Empty";
@@ -18,7 +19,21 @@ type Result = { subject_id: string; total_percent: number; grade: string | null;
 type Notice_ = { id: string; title: string; body: string; created_at: string };
 type Tab = "overview" | "fees" | "results" | "notices";
 
-export default function PortalView({ schoolId }: { schoolId: string }) {
+const PAYMENT_BANNER: Record<string, { ok?: string; error?: string }> = {
+  success: { ok: "Payment received. Thank you! It now shows under Payments received." },
+  pending: { ok: "Your payment is still being confirmed. Please check again in a minute." },
+  review: { error: "We received your payment but could not apply it automatically. The school office will review it. Please keep your payment confirmation." },
+  failed: { error: "The payment was not completed. You have not been charged." },
+  error: { error: "We could not confirm that payment. If you were charged, contact the school office." },
+};
+
+export default function PortalView({ schoolId, slug }: { schoolId: string; slug: string }) {
+  const paymentStatus = useSearchParams().get("payment");
+  const [onlineEnabled, setOnlineEnabled] = useState(false);
+  const [payInvoice, setPayInvoice] = useState<string | null>(null);
+  const [payAmount, setPayAmount] = useState("");
+  const [payBusy, setPayBusy] = useState(false);
+  const [payError, setPayError] = useState("");
   const db = useMemo(() => createClient(), []);
   const [children, setChildren] = useState<Child[]>([]);
   const [childId, setChildId] = useState("");
@@ -38,13 +53,15 @@ export default function PortalView({ schoolId }: { schoolId: string }) {
   const [notices, setNotices] = useState<Notice_[]>([]);
 
   const loadChildren = useCallback(async () => {
-    const [st, cl, su, tm, an] = await Promise.all([
+    const [st, cl, su, tm, an, ps] = await Promise.all([
       db.from("students").select("id,first_name,last_name,admission_number").eq("school_id", schoolId).order("first_name"),
       db.from("school_classes").select("id,name").eq("school_id", schoolId),
       db.from("school_subjects").select("id,name").eq("school_id", schoolId),
       db.from("terms").select("id,name,academic_year_id,starts_on,ends_on,status").eq("school_id", schoolId).order("starts_on", { ascending: false }),
       db.from("announcements").select("id,title,body,created_at").eq("school_id", schoolId).order("created_at", { ascending: false }).limit(30),
+      db.from("school_payment_settings").select("online_enabled").eq("school_id", schoolId).maybeSingle(),
     ]);
+    setOnlineEnabled(Boolean((ps.data as { online_enabled?: boolean } | null)?.online_enabled));
     if (st.error) setError("Unable to load your family's records.");
     const kids = (st.data ?? []) as Child[];
     setChildren(kids); setChildId((c) => c || kids[0]?.id || "");
@@ -95,6 +112,20 @@ export default function PortalView({ schoolId }: { schoolId: string }) {
     return () => window.clearTimeout(timer);
   }, [db, schoolId, enrollmentForTerm, term]);
 
+  async function payOnline(b: Bal) {
+    const amount = toPesewas(payAmount);
+    const owedNow = b.total_pesewas - b.paid_pesewas;
+    if (!amount || amount < 100) return setPayError("Enter an amount of at least GHS 1.00.");
+    if (amount > owedNow) return setPayError(`The amount is more than the balance of ${ghs(owedNow)}.`);
+    setPayBusy(true); setPayError("");
+    try {
+      const res = await fetch("/api/payments/paystack/initialize", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ schoolId, invoiceId: b.invoice_id, amountPesewas: amount, next: `/schools/${slug}/portal` }) });
+      const body = (await res.json()) as { authorizationUrl?: string; error?: string };
+      if (!res.ok || !body.authorizationUrl) { setPayError(body.error ?? "Could not start the payment."); setPayBusy(false); return; }
+      window.location.assign(body.authorizationUrl);
+    } catch { setPayError("Could not reach the server."); setPayBusy(false); }
+  }
+
   if (!loaded) return <p className="text-sm text-slate-500">Loading…</p>;
   if (children.length === 0) return <Empty>No students are linked to your account yet. Please ask the school office to link your account.</Empty>;
 
@@ -104,7 +135,7 @@ export default function PortalView({ schoolId }: { schoolId: string }) {
 
   return (
     <div className="space-y-6">
-      <Notice error={error} />
+      <Notice error={error} {...(paymentStatus ? PAYMENT_BANNER[paymentStatus] : {})} />
       <div className={`${card} grid gap-3 md:grid-cols-3`}>
         <div><label className={label}>Student</label><select className={field} value={childId} onChange={(e) => setChildId(e.target.value)}>{children.map((c) => <option key={c.id} value={c.id}>{c.first_name} {c.last_name}</option>)}</select></div>
         <div><label className={label}>Term</label><select className={field} value={termId} onChange={(e) => setTermId(e.target.value)}>{terms.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
@@ -121,8 +152,14 @@ export default function PortalView({ schoolId }: { schoolId: string }) {
 
       {tab === "fees" && (bals.length === 0 ? <Empty>No invoices yet.</Empty> : (
         <div className="space-y-4">
-          <div className={`${card} overflow-x-auto p-0`}><table className="w-full"><thead className="border-b"><tr><th className={th}>Invoice</th><th className={th}>Issued</th><th className={`${th} text-right`}>Total</th><th className={`${th} text-right`}>Paid</th><th className={`${th} text-right`}>Balance</th></tr></thead>
-            <tbody>{bals.map((b) => { const bal = b.total_pesewas - b.paid_pesewas; return <tr key={b.invoice_id} className="border-b last:border-0"><td className={td}>{b.invoice_number}{b.due_on && <div className="text-xs text-slate-500">Due {fmtDate(b.due_on)}</div>}</td><td className={td}>{fmtDate(b.issued_on)}</td><td className={`${td} text-right`}>{ghs(b.total_pesewas)}</td><td className={`${td} text-right`}>{ghs(b.paid_pesewas)}</td><td className={`${td} text-right font-semibold ${bal > 0 ? "text-red-700" : "text-green-700"}`}>{bal > 0 ? ghs(bal) : "Paid"}</td></tr>; })}</tbody></table></div>
+          <div className={`${card} overflow-x-auto p-0`}><table className="w-full"><thead className="border-b"><tr><th className={th}>Invoice</th><th className={th}>Issued</th><th className={`${th} text-right`}>Total</th><th className={`${th} text-right`}>Paid</th><th className={`${th} text-right`}>Balance</th><th /></tr></thead>
+            <tbody>{bals.map((b) => { const bal = b.total_pesewas - b.paid_pesewas; return <Fragment key={b.invoice_id}><tr className="border-b last:border-0"><td className={td}>{b.invoice_number}{b.due_on && <div className="text-xs text-slate-500">Due {fmtDate(b.due_on)}</div>}</td><td className={td}>{fmtDate(b.issued_on)}</td><td className={`${td} text-right`}>{ghs(b.total_pesewas)}</td><td className={`${td} text-right`}>{ghs(b.paid_pesewas)}</td><td className={`${td} text-right font-semibold ${bal > 0 ? "text-red-700" : "text-green-700"}`}>{bal > 0 ? ghs(bal) : "Paid"}</td>
+              <td className={`${td} text-right`}>{onlineEnabled && bal > 0 && <button className={btnLight} onClick={() => { setPayInvoice(payInvoice === b.invoice_id ? null : b.invoice_id); setPayAmount((bal / 100).toFixed(2)); setPayError(""); }}>Pay online</button>}</td></tr>
+              {payInvoice === b.invoice_id && <tr className="border-b bg-slate-50"><td colSpan={6} className="p-4"><div className="flex flex-wrap items-end gap-3">
+                <div><label className={label}>Amount (GHS)</label><input className={`${field} w-40`} inputMode="decimal" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} /></div>
+                <button className={btn} disabled={payBusy} onClick={() => payOnline(b)}>{payBusy ? "Opening…" : "Continue to secure payment"}</button>
+                <p className="w-full text-xs text-slate-500">You will pay on Paystack with mobile money or card. The school never sees your card or wallet PIN.</p>
+                {payError && <p role="alert" className="w-full text-sm text-red-700">{payError}</p>}</div></td></tr>}</Fragment>; })}</tbody></table></div>
           {pays.length > 0 && <div className={`${card} overflow-x-auto p-0`}><div className="border-b px-4 py-3 font-semibold">Payments received</div><table className="w-full"><tbody>{pays.map((p) => <tr key={p.id} className="border-b last:border-0"><td className={td}>{fmtDate(p.paid_on)}</td><td className={td}>{p.receipt_number}</td><td className={`${td} capitalize`}>{p.method.replace("_", " ")}</td><td className={`${td} text-right`}>{ghs(p.amount_pesewas)}</td></tr>)}</tbody></table></div>}
         </div>))}
 

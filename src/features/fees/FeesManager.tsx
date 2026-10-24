@@ -8,6 +8,8 @@ import { btn, btnLight, card, field, label, td, th } from "@/components/ui/style
 import Tabs from "@/components/ui/Tabs";
 import Notice from "@/components/ui/Notice";
 import Empty from "@/components/ui/Empty";
+import OnlinePaymentsPanel from "./OnlinePaymentsPanel";
+import AccountingExport from "./AccountingExport";
 
 type Year = { id: string; name: string; status: string };
 type Term = { id: string; name: string; academic_year_id: string; status: string };
@@ -16,7 +18,7 @@ type Student = { id: string; first_name: string; last_name: string; admission_nu
 type Structure = { id: string; academic_year_id: string; term_id: string | null; class_id: string | null; name: string; amount_pesewas: number; is_active: boolean };
 type Balance = { invoice_id: string; student_id: string; academic_year_id: string; term_id: string | null; invoice_number: string; issued_on: string; due_on: string | null; status: string; total_pesewas: number; paid_pesewas: number };
 type Expense = { id: string; category: string; description: string; amount_pesewas: number; spent_on: string };
-type Tab = "invoices" | "structures" | "expenses" | "arrears";
+type Tab = "invoices" | "structures" | "expenses" | "arrears" | "online" | "export";
 type DbResult<T> = { error: { message?: string; code?: string } | null; data?: T | null };
 
 const METHODS = [
@@ -170,6 +172,7 @@ export default function FeesManager({ schoolId, schoolName, canManage }: { schoo
       <Tabs<Tab> value={tab} onChange={setTab} tabs={[
         { id: "invoices", label: "Invoices & payments" }, { id: "structures", label: "Fee structure" },
         { id: "expenses", label: "Expenses" }, { id: "arrears", label: `Arrears (${arrears.length})` },
+        { id: "online", label: "Online payments" }, { id: "export", label: "Accounting export" },
       ]} />
 
       {(tab === "invoices" || tab === "structures") && (
@@ -274,6 +277,9 @@ export default function FeesManager({ schoolId, schoolName, canManage }: { schoo
           )}
         </section>
       )}
+
+      {tab === "online" && <OnlinePaymentsPanel schoolId={schoolId} canManage={canManage} />}
+      {tab === "export" && <AccountingExport schoolId={schoolId} />}
 
       {tab === "arrears" && (
         arrears.length === 0 ? <Empty>No outstanding balances.</Empty> : (

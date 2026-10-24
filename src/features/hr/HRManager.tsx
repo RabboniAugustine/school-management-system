@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRun } from "@/lib/useRun";
-import { dbMessage, daysBetween, esc, fmtDate, ghs, printHtml, toPesewas, today } from "@/lib/format";
+import { dbMessage, daysBetween, downloadCsv, esc, fmtDate, ghs, money2, printHtml, toPesewas, today } from "@/lib/format";
 import { btn, btnLight, card, field, label, td, th } from "@/components/ui/styles";
 import Tabs from "@/components/ui/Tabs";
 import Notice from "@/components/ui/Notice";
@@ -151,7 +151,8 @@ export default function HRManager({ schoolId, schoolName, canLeave, canManageLea
           {run && <div className={`${card} p-0`}>
             <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3"><div><h3 className="font-semibold">{monthLabel(run.period_month)}</h3><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_STYLE[run.status]}`}>{run.status}</span></div>
               <div className="flex gap-2">{canManagePayroll && run.status === "draft" && <button className={btn} disabled={busy} onClick={() => { if (confirm("Approve this run? Payslips can no longer be changed.")) void act(() => db.from("payroll_runs").update({ status: "approved" }).eq("school_id", schoolId).eq("id", run.id), "Payroll approved."); }}>Approve</button>}
-                {canManagePayroll && run.status === "approved" && <button className={btn} disabled={busy} onClick={() => act(() => db.from("payroll_runs").update({ status: "paid" }).eq("school_id", schoolId).eq("id", run.id), "Marked as paid.")}>Mark as paid</button>}</div></div>
+                {canManagePayroll && run.status === "approved" && <button className={btn} disabled={busy} onClick={() => act(() => db.from("payroll_runs").update({ status: "paid" }).eq("school_id", schoolId).eq("id", run.id), "Marked as paid.")}>Mark as paid</button>}
+                <button className={btnLight} onClick={() => downloadCsv(`payroll_${run.period_month.slice(0, 7)}.csv`, [["Month", "Staff", "Basic (GHS)", "Allowances (GHS)", "Deductions (GHS)", "Net (GHS)"], ...slips.map((s) => [run.period_month.slice(0, 7), name(s.staff_id), money2(s.basic_pesewas), money2(s.allowances_pesewas), money2(s.deductions_pesewas), money2(s.net_pesewas)])])}>Download CSV</button></div></div>
             <div className="overflow-x-auto"><table className="w-full"><thead className="border-b"><tr><th className={th}>Staff</th><th className={`${th} text-right`}>Basic</th><th className={`${th} text-right`}>Allowances</th><th className={`${th} text-right`}>Deductions</th><th className={`${th} text-right`}>Net</th><th /></tr></thead>
               <tbody>{slips.map((s) => <tr key={s.id} className="border-b"><td className={td}>{name(s.staff_id)}</td><td className={`${td} text-right`}>{ghs(s.basic_pesewas)}</td><td className={`${td} text-right`}>{ghs(s.allowances_pesewas)}</td><td className={`${td} text-right`}>{ghs(s.deductions_pesewas)}</td><td className={`${td} text-right font-semibold`}>{ghs(s.net_pesewas)}</td><td className={`${td} text-right`}><button className={btnLight} onClick={() => printSlip(s, run)}>Payslip</button></td></tr>)}
                 <tr><td className={`${td} font-semibold`} colSpan={4}>Total net pay</td><td className={`${td} text-right font-bold`}>{ghs(slips.reduce((t, s) => t + s.net_pesewas, 0))}</td><td /></tr></tbody></table></div></div>}

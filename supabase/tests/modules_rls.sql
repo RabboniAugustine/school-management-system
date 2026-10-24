@@ -326,5 +326,18 @@ DO $$ DECLARE n int; BEGIN
 END $$;
 SELECT t.cnt($$SELECT 1 FROM public.sms_outbox WHERE kind='absence' AND channel='whatsapp'$$,1,'whatsapp message is stored with its channel');
 SELECT t.fails($$SELECT public.queue_absence_alerts('10000000-0000-0000-0000-00000000000a','2026-10-05','telegram')$$,'unknown channel rejected');
+
+-- ---------- ACCOUNTING JOURNAL ----------
+SELECT t.act('00000000-0000-0000-0000-0000000000a2');
+DO $$ DECLARE d bigint; c bigint; n int; BEGIN
+ SELECT SUM(debit_pesewas),SUM(credit_pesewas),COUNT(*) INTO d,c,n FROM public.accounting_journal;
+ IF d IS NULL OR d <> c THEN RAISE EXCEPTION 'FAIL journal is not balanced: debit % credit %', d, c; END IF;
+ RAISE NOTICE 'ok   journal balances: % lines, debit = credit = %', n, d;
+END $$;
+SELECT t.cnt($$SELECT 1 FROM public.accounting_journal WHERE source='payment' AND account='Mobile money' AND debit_pesewas=10000$$,1,'online payment appears as a mobile-money debit');
+SELECT t.act('00000000-0000-0000-0000-0000000000a3');
+SELECT t.cnt('SELECT 1 FROM public.accounting_journal',0,'teacher cannot read the journal');
+SELECT t.act('00000000-0000-0000-0000-0000000000b1');
+SELECT t.cnt('SELECT 1 FROM public.accounting_journal',0,'other school cannot read this journal');
 SELECT t.root();
 ROLLBACK;
