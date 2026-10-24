@@ -8,6 +8,7 @@ BEGIN
  PERFORM set_config('request.jwt.claim.sub', COALESCE(uid::text,''), true);
  EXECUTE 'RESET ROLE'; EXECUTE 'SET LOCAL ROLE authenticated';
 END $$;
+CREATE FUNCTION t.svc() RETURNS void LANGUAGE plpgsql AS $$ BEGIN EXECUTE 'RESET ROLE'; EXECUTE 'SET LOCAL ROLE service_role'; END $$;
 CREATE FUNCTION t.root() RETURNS void LANGUAGE plpgsql AS $$ BEGIN EXECUTE 'RESET ROLE'; END $$;
 CREATE FUNCTION t.cnt(q text, expected int, label text) RETURNS void LANGUAGE plpgsql AS $$
 DECLARE n int;
@@ -25,7 +26,7 @@ BEGIN
  EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'ok   % (rejected)', label; RETURN; END;
  IF n > 0 THEN RAISE EXCEPTION 'FAIL %: % rows were changed', label, n; END IF;
  RAISE NOTICE 'ok   % (0 rows affected)', label; END $$;
-GRANT USAGE ON SCHEMA t TO authenticated; GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA t TO authenticated;
+GRANT USAGE ON SCHEMA t TO authenticated, service_role; GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA t TO authenticated, service_role;
 
 -- ---------- seed (as superuser) ----------
 INSERT INTO auth.users(id,email) VALUES
@@ -233,5 +234,97 @@ SELECT t.act('00000000-0000-0000-0000-0000000000a1');
 SELECT t.cnt($$SELECT 1 FROM public.list_portal_links('10000000-0000-0000-0000-00000000000a') WHERE email='parent1@t.dev'$$,2,'admin lists portal links with emails');
 SELECT t.act('00000000-0000-0000-0000-0000000000a4');
 SELECT t.fails($$SELECT * FROM public.list_portal_links('10000000-0000-0000-0000-00000000000a')$$,'parent cannot list portal links');
+
+-- ---------- TRANSPORT ----------
+SELECT t.root();
+UPDATE public.students SET gender='female' WHERE id='60000000-0000-0000-0000-000000000001';
+UPDATE public.students SET gender='male' WHERE id='60000000-0000-0000-0000-000000000002';
+SELECT t.act('00000000-0000-0000-0000-0000000000a1');
+INSERT INTO public.transport_routes(school_id,name,fee_pesewas) VALUES('10000000-0000-0000-0000-00000000000a','East route',15000);
+INSERT INTO public.transport_vehicles(school_id,route_id,plate_number,capacity) VALUES('10000000-0000-0000-0000-00000000000a',(SELECT id FROM public.transport_routes WHERE name='East route'),'GR-1234-26',1);
+INSERT INTO public.student_transport(school_id,student_id,route_id,academic_year_id,pickup_point) VALUES('10000000-0000-0000-0000-00000000000a','60000000-0000-0000-0000-000000000001',(SELECT id FROM public.transport_routes WHERE name='East route'),'30000000-0000-0000-0000-00000000000a','Kasoa junction');
+SELECT t.fails($$INSERT INTO public.student_transport(school_id,student_id,route_id,academic_year_id) VALUES('10000000-0000-0000-0000-00000000000a','60000000-0000-0000-0000-000000000002',(SELECT id FROM public.transport_routes WHERE name='East route'),'30000000-0000-0000-0000-00000000000a')$$,'full route rejects another student');
+SELECT t.fails($$INSERT INTO public.student_transport(school_id,student_id,route_id,academic_year_id) VALUES('10000000-0000-0000-0000-00000000000a','60000000-0000-0000-0000-000000000001',(SELECT id FROM public.transport_routes WHERE name='East route'),'30000000-0000-0000-0000-00000000000a')$$,'a student has one active route per year');
+SELECT t.act('00000000-0000-0000-0000-0000000000a3');
+SELECT t.cnt('SELECT 1 FROM public.transport_routes',0,'teacher cannot see transport');
+SELECT t.act('00000000-0000-0000-0000-0000000000b1');
+SELECT t.cnt('SELECT 1 FROM public.transport_routes',0,'other school cannot see transport');
+
+-- ---------- HOSTEL ----------
+SELECT t.act('00000000-0000-0000-0000-0000000000a1');
+INSERT INTO public.hostels(school_id,name,gender) VALUES('10000000-0000-0000-0000-00000000000a','Boys house','male');
+INSERT INTO public.hostel_rooms(school_id,hostel_id,room_number,capacity) VALUES('10000000-0000-0000-0000-00000000000a',(SELECT id FROM public.hostels WHERE name='Boys house'),'B1',1);
+SELECT t.fails($$INSERT INTO public.hostel_allocations(school_id,room_id,student_id,academic_year_id) VALUES('10000000-0000-0000-0000-00000000000a',(SELECT id FROM public.hostel_rooms WHERE room_number='B1'),'60000000-0000-0000-0000-000000000001','30000000-0000-0000-0000-00000000000a')$$,'girl cannot be placed in a boys hostel');
+INSERT INTO public.hostel_allocations(school_id,room_id,student_id,academic_year_id) VALUES('10000000-0000-0000-0000-00000000000a',(SELECT id FROM public.hostel_rooms WHERE room_number='B1'),'60000000-0000-0000-0000-000000000002','30000000-0000-0000-0000-00000000000a');
+UPDATE public.students SET gender='male' WHERE false;
+SELECT t.root(); UPDATE public.students SET gender='male' WHERE id='60000000-0000-0000-0000-000000000003'; SELECT t.act('00000000-0000-0000-0000-0000000000a1');
+SELECT t.fails($$INSERT INTO public.hostel_allocations(school_id,room_id,student_id,academic_year_id) VALUES('10000000-0000-0000-0000-00000000000a',(SELECT id FROM public.hostel_rooms WHERE room_number='B1'),'60000000-0000-0000-0000-000000000003','30000000-0000-0000-0000-00000000000a')$$,'full room rejects another student');
+UPDATE public.hostel_allocations SET status='ended', ended_on=CURRENT_DATE;
+INSERT INTO public.hostel_allocations(school_id,room_id,student_id,academic_year_id) VALUES('10000000-0000-0000-0000-00000000000a',(SELECT id FROM public.hostel_rooms WHERE room_number='B1'),'60000000-0000-0000-0000-000000000003','30000000-0000-0000-0000-00000000000a');
+SELECT t.act('00000000-0000-0000-0000-0000000000a4');
+SELECT t.cnt('SELECT 1 FROM public.hostel_allocations',0,'parent cannot see hostel allocations');
+
+-- ---------- ONLINE PAYMENTS ----------
+SELECT t.act('00000000-0000-0000-0000-0000000000a4');
+SELECT t.fails($$SELECT * FROM public.start_online_payment('10000000-0000-0000-0000-00000000000a',(SELECT invoice_id FROM public.invoice_balances WHERE student_id='60000000-0000-0000-0000-000000000001'),10000)$$,'online payment blocked until the school enables it');
+SELECT t.act('00000000-0000-0000-0000-0000000000a2');
+INSERT INTO public.school_payment_settings(school_id,online_enabled,paystack_subaccount_code) VALUES('10000000-0000-0000-0000-00000000000a',true,'ACCT_abc123xyz');
+SELECT t.fails($$INSERT INTO public.school_payment_settings(school_id,online_enabled) VALUES('10000000-0000-0000-0000-00000000000b',true)$$,'cannot enable online payments without a subaccount (and not for another school)');
+SELECT t.act('00000000-0000-0000-0000-0000000000a4');
+CREATE TEMP TABLE ref1 AS SELECT * FROM public.start_online_payment('10000000-0000-0000-0000-00000000000a',(SELECT invoice_id FROM public.invoice_balances WHERE student_id='60000000-0000-0000-0000-000000000001'),10000);
+SELECT t.cnt('SELECT 1 FROM ref1 WHERE amount_pesewas=10000 AND subaccount_code=''ACCT_abc123xyz'' AND reference LIKE ''SMS-%''',1,'parent starts an online payment for their child');
+SELECT t.fails($$SELECT * FROM public.start_online_payment('10000000-0000-0000-0000-00000000000a',(SELECT invoice_id FROM public.invoice_balances WHERE student_id='60000000-0000-0000-0000-000000000001'),999999)$$,'cannot pay more than the balance');
+SELECT t.fails($$SELECT * FROM public.start_online_payment('10000000-0000-0000-0000-00000000000a',(SELECT invoice_id FROM public.invoice_balances WHERE student_id='60000000-0000-0000-0000-000000000001'),50)$$,'minimum online payment enforced');
+SELECT t.act('00000000-0000-0000-0000-0000000000a5');
+SELECT t.fails($$SELECT * FROM public.start_online_payment('10000000-0000-0000-0000-00000000000a',(SELECT invoice_id FROM public.invoice_balances WHERE student_id='60000000-0000-0000-0000-000000000001'),10000)$$,'a parent cannot pay for another family''s child');
+SELECT t.fails($$SELECT public.apply_online_payment('SMS-x','10000','card','p')$$,'browser users cannot confirm payments');
+SELECT t.root(); CREATE TEMP TABLE r1 AS SELECT reference FROM ref1;
+GRANT SELECT ON r1 TO service_role;
+SELECT t.svc();
+DO $$ DECLARE a uuid; b uuid; ref text; BEGIN
+ SELECT reference INTO ref FROM r1;
+ a := public.apply_online_payment(ref,10000,'mobile_money','PSK-1');
+ b := public.apply_online_payment(ref,10000,'mobile_money','PSK-1');
+ IF a IS NULL OR a <> b THEN RAISE EXCEPTION 'FAIL apply must be idempotent (% vs %)', a, b; END IF;
+ RAISE NOTICE 'ok   verified payment applied once, repeat returns the same payment';
+END $$;
+SELECT t.root();
+SELECT t.cnt($$SELECT 1 FROM public.payments WHERE reference='PSK-1' AND method='mobile_money' AND amount_pesewas=10000 AND received_by IS NULL$$,1,'exactly one payment row was created');
+SELECT t.cnt($$SELECT 1 FROM public.invoice_balances WHERE student_id='60000000-0000-0000-0000-000000000001' AND paid_pesewas=30000$$,1,'invoice balance reflects the online payment');
+SELECT t.act('00000000-0000-0000-0000-0000000000a4');
+CREATE TEMP TABLE ref2 AS SELECT * FROM public.start_online_payment('10000000-0000-0000-0000-00000000000a',(SELECT invoice_id FROM public.invoice_balances WHERE student_id='60000000-0000-0000-0000-000000000001'),5000);
+SELECT t.root(); CREATE TEMP TABLE r2 AS SELECT reference FROM ref2; GRANT SELECT ON r2 TO service_role; SELECT t.svc();
+DO $$ DECLARE a uuid; BEGIN
+ a := public.apply_online_payment((SELECT reference FROM r2),9999,'card','PSK-2');
+ IF a IS NOT NULL THEN RAISE EXCEPTION 'FAIL amount mismatch must not create a payment'; END IF;
+ RAISE NOTICE 'ok   amount mismatch creates no payment';
+END $$;
+SELECT t.root();
+SELECT t.cnt($$SELECT 1 FROM public.online_payments WHERE status='failed' AND needs_review$$,1,'amount mismatch is flagged for review');
+-- invoice settled by cash while an online payment was in flight
+SELECT t.act('00000000-0000-0000-0000-0000000000a5');
+CREATE TEMP TABLE ref3 AS SELECT * FROM public.start_online_payment('10000000-0000-0000-0000-00000000000a',(SELECT invoice_id FROM public.invoice_balances WHERE student_id='60000000-0000-0000-0000-000000000002'),50000);
+SELECT t.act('00000000-0000-0000-0000-0000000000a2');
+INSERT INTO public.payments(school_id,invoice_id,receipt_number,amount_pesewas,method) VALUES('10000000-0000-0000-0000-00000000000a',(SELECT invoice_id FROM public.invoice_balances WHERE student_id='60000000-0000-0000-0000-000000000002'),'RCT-CASH',50000,'cash');
+SELECT t.root(); CREATE TEMP TABLE r3 AS SELECT reference FROM ref3; GRANT SELECT ON r3 TO service_role; SELECT t.svc();
+DO $$ DECLARE a uuid; BEGIN
+ a := public.apply_online_payment((SELECT reference FROM r3),50000,'card','PSK-3');
+ IF a IS NOT NULL THEN RAISE EXCEPTION 'FAIL overpayment must not be applied'; END IF;
+ RAISE NOTICE 'ok   payment arriving after the invoice was settled is not applied';
+END $$;
+SELECT t.root();
+SELECT t.cnt($$SELECT 1 FROM public.online_payments WHERE failure_reason LIKE 'Invoice already settled%' AND needs_review$$,1,'late online payment is flagged for refund');
+SELECT t.act('00000000-0000-0000-0000-0000000000a4');
+SELECT t.cnt('SELECT 1 FROM public.online_payments',2,'parent sees only their own online payment attempts');
+
+-- ---------- WHATSAPP CHANNEL ----------
+SELECT t.act('00000000-0000-0000-0000-0000000000a1');
+DO $$ DECLARE n int; BEGIN
+ n := public.queue_absence_alerts('10000000-0000-0000-0000-00000000000a','2026-10-05','whatsapp');
+ IF n <> 1 THEN RAISE EXCEPTION 'FAIL whatsapp alert expected 1 got %', n; END IF;
+ RAISE NOTICE 'ok   the same absence can be alerted once per channel';
+END $$;
+SELECT t.cnt($$SELECT 1 FROM public.sms_outbox WHERE kind='absence' AND channel='whatsapp'$$,1,'whatsapp message is stored with its channel');
+SELECT t.fails($$SELECT public.queue_absence_alerts('10000000-0000-0000-0000-00000000000a','2026-10-05','telegram')$$,'unknown channel rejected');
 SELECT t.root();
 ROLLBACK;
