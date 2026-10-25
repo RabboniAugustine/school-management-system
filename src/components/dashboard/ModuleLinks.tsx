@@ -1,43 +1,36 @@
 import Link from "next/link";
+import { buildNavigation } from "@/lib/navigation";
 
-const modules: { label: string; path: string; permission: string | string[] }[] = [
-  { label: "Academic calendar", path: "academics/years", permission: "academics.read" },
-  { label: "Classes & streams", path: "academics/classes", permission: "classes.read" },
-  { label: "Subjects", path: "academics/subjects", permission: "subjects.read" },
-  { label: "Student directory", path: "students", permission: "students.read" },
-  { label: "Staff", path: "staff", permission: "staff.read" },
-  { label: "Enrollments", path: "academics/enrollments", permission: "enrollments.read" },
-  { label: "Attendance", path: "attendance", permission: "attendance.read" },
-  { label: "Timetable", path: "timetable", permission: "timetable.read" },
-  { label: "Grades & reports", path: "grades", permission: "grades.read" },
-  { label: "Fees & finance", path: "fees", permission: "fees.read" },
-  { label: "Library", path: "library", permission: "library.read" },
-  { label: "Transport", path: "transport", permission: "transport.read" },
-  { label: "Hostel", path: "hostel", permission: "hostel.read" },
-  { label: "ID cards", path: "id-cards", permission: "students.read" },
-  { label: "Communication", path: "communication", permission: "communication.read" },
-  { label: "HR & payroll", path: "hr", permission: ["hr.read", "payroll.read", "leave.request"] },
-  { label: "Reports", path: "reports", permission: "reports.read" },
-  { label: "My family", path: "portal", permission: "portal.read" },
-  { label: "Portal access", path: "portal/access", permission: "portal.manage" },
-];
-
-export default function ModuleLinks({ slug, permissions }: {
+/** Dashboard quick links: the same permission-filtered modules as the sidebar, grouped by area. */
+export default function ModuleLinks({ slug, permissions, isAdmin = false }: {
   slug: string;
   permissions: Set<string>;
+  isAdmin?: boolean;
 }) {
   const base = `/schools/${encodeURIComponent(slug)}`;
-  const visible = modules.filter((m) =>
-    (Array.isArray(m.permission) ? m.permission : [m.permission]).some((p) => permissions.has(p)));
+  const sections = buildNavigation(permissions, isAdmin)
+    .map((s) => ({ ...s, items: s.items.filter((i) => i.path !== "dashboard") }))
+    .filter((s) => s.items.length > 0);
+
+  if (sections.length === 0) {
+    return <p className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-6 text-center text-sm text-slate-500">No modules have been assigned to your role yet. Please contact your school administrator.</p>;
+  }
+
   return (
-    <nav aria-label="School modules" className="flex flex-wrap gap-2 border-b border-slate-200 pb-5">
-      <Link href={`${base}/dashboard`} className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white">Dashboard</Link>
-      {visible.map((m) => (
-        <Link key={m.path} href={`${base}/${m.path}`}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
-          {m.label}
-        </Link>
+    <div className="space-y-6">
+      {sections.map((section) => (
+        <section key={section.title}>
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-500">{section.title.replace("&amp;", "&")}</h2>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {section.items.map((item) => (
+              <Link key={item.path} href={`${base}/${item.path}`}
+                className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm font-semibold text-slate-800 transition hover:border-blue-300 hover:bg-blue-50">
+                {item.label}
+              </Link>
+            ))}
+          </div>
+        </section>
       ))}
-    </nav>
+    </div>
   );
 }

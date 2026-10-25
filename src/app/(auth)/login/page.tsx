@@ -37,7 +37,9 @@ import {
   type FormEvent,
 } from "react";
 
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { resolveHomePath } from "@/lib/auth/resolveHome";
 import { clearOfflineCaches } from "@/components/offline/OfflineStatus";
 
 /**
@@ -50,6 +52,7 @@ export default function LoginPage() {
   // =====================================================
 
   const supabase = useMemo(() => createClient(), []);
+  const router = useRouter();
 
   // =====================================================
   // FORM STATES
@@ -94,6 +97,9 @@ export default function LoginPage() {
           setAuthenticatedEmail(
             data.user.email ?? "Authenticated user"
           );
+
+          // Already signed in: go straight to the dashboard.
+          router.replace(await resolveHomePath(supabase));
         }
       } catch {
         // A failed session check does not prevent
@@ -110,7 +116,7 @@ export default function LoginPage() {
     return () => {
       active = false;
     };
-  }, [supabase]);
+  }, [supabase, router]);
 
   // =====================================================
   // EMAIL VALIDATION
@@ -202,6 +208,9 @@ export default function LoginPage() {
       // Remove the password from component state.
 
       setPassword("");
+
+      // Go to the school dashboard (or school selection).
+      router.replace(await resolveHomePath(supabase));
 
     } catch {
       setErrorMessage(
@@ -459,72 +468,40 @@ export default function LoginPage() {
           ) : authenticatedEmail ? (
 
             /* ===================================== */
-            /* AUTHENTICATED USER VIEW */
+            /* SIGNED IN: REDIRECTING */
             /* ===================================== */
 
-            <div className="rounded-2xl bg-white p-8 text-center shadow-sm sm:p-10">
+            <div
+              className="rounded-2xl bg-white p-10 text-center shadow-sm"
+              role="status"
+            >
 
-              <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-green-100 text-green-700">
+              <div className="mx-auto mb-5 h-10 w-10 animate-spin rounded-full border-4 border-blue-100 border-t-blue-700" />
 
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="38"
-                  height="38"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="m5 12 4 4L19 6" />
-                </svg>
-
-              </div>
-
-              <h2 className="text-2xl font-bold text-slate-900">
-                Successfully Signed In
-              </h2>
-
-              <p className="mt-4 text-slate-600">
-                You are authenticated as:
+              <p className="font-semibold text-slate-900">
+                Taking you to your dashboard...
               </p>
 
-              <p className="mt-2 break-all font-semibold text-blue-700">
-                {authenticatedEmail}
+              <p className="mt-2 break-all text-sm text-slate-500">
+                Signed in as {authenticatedEmail}
               </p>
-
-              <div className="mt-8 rounded-xl border border-blue-100 bg-blue-50 p-4 text-left">
-
-                <p className="text-sm leading-6 text-blue-900">
-                  Authentication is working. Your school dashboard
-                  and role-based navigation will be connected in
-                  the upcoming development steps.
-                </p>
-
-              </div>
 
               {errorMessage && (
-
                 <div
                   role="alert"
                   className="mt-5 rounded-lg bg-red-50 p-3 text-sm text-red-700"
                 >
                   {errorMessage}
                 </div>
-
               )}
 
               <button
                 type="button"
                 onClick={handleLogout}
                 disabled={loading}
-                className="mt-8 w-full rounded-xl bg-slate-900 px-5 py-3.5 font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-6 text-sm font-medium text-slate-500 underline hover:text-slate-800 disabled:opacity-50"
               >
-
-                {loading ? "Signing out..." : "Sign Out"}
-
+                Not you? Sign out
               </button>
 
             </div>

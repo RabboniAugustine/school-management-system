@@ -45,6 +45,8 @@ import {
 
 import Link from "next/link";
 
+import { useRouter } from "next/navigation";
+
 import { createClient } from "@/lib/supabase/client";
 
 import type { User } from "@supabase/supabase-js";
@@ -78,6 +80,8 @@ function generateSchoolSlug(name: string): string {
 // =====================================================
 
 export default function RegisterSchoolPage() {
+  const router = useRouter();
+
   // ---------------------------------------------------
   // SUPABASE CLIENT
   // ---------------------------------------------------
@@ -117,6 +121,18 @@ export default function RegisterSchoolPage() {
 
   const [createdSchoolId, setCreatedSchoolId] =
     useState<string | null>(null);
+
+  // After a successful registration, open the new school's dashboard automatically.
+  useEffect(() => {
+    if (!createdSchoolId) return;
+
+    const timer = window.setTimeout(() => {
+      router.push(`/schools/${encodeURIComponent(schoolSlug.trim().toLowerCase())}/dashboard`);
+    }, 2500);
+
+    return () => window.clearTimeout(timer);
+  }, [createdSchoolId, router, schoolSlug]);
+
 
   // =====================================================
   // VERIFY AUTHENTICATION
@@ -644,18 +660,17 @@ export default function RegisterSchoolPage() {
 
                   <p className="text-sm leading-6 text-blue-900">
                     Your school and proprietor membership
-                    have been created. School selection and
-                    dashboard access will become available
-                    in the next development steps.
+                    have been created. Opening your dashboard
+                    now...
                   </p>
 
                 </div>
 
                 <Link
-                  href="/login"
+                  href={`/schools/${encodeURIComponent(schoolSlug.trim().toLowerCase())}/dashboard`}
                   className="mt-8 block rounded-xl bg-blue-800 px-6 py-4 font-semibold text-white transition hover:bg-blue-900"
                 >
-                  Return to Account
+                  Go to my dashboard
                 </Link>
 
               </div>

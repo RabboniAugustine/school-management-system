@@ -54,6 +54,8 @@ import {
 import Link from "next/link";
 
 import { usePathname } from "next/navigation";
+import SignOutButton from "@/components/auth/SignOutButton";
+import { buildNavigation, type IconName, type NavigationSection } from "@/lib/navigation";
 
 
 // =====================================================
@@ -74,160 +76,10 @@ interface DashboardLayoutProps {
   school: SchoolInformation;
   user: UserInformation;
   roles: string[];
+  permissions?: string[];
+  isAdmin?: boolean;
   children: ReactNode;
 }
-
-type IconName =
-  | "dashboard"
-  | "academic"
-  | "students"
-  | "attendance"
-  | "exams"
-  | "finance"
-  | "staff"
-  | "library"
-  | "reports"
-  | "settings"
-  | "switch";
-
-interface NavigationItem {
-  label: string;
-  icon: IconName;
-  path?: string;
-  available: boolean;
-  allowedRoles?: string[];
-}
-
-interface NavigationSection {
-  title: string;
-  items: NavigationItem[];
-}
-
-
-// =====================================================
-// NAVIGATION CONFIGURATION
-// =====================================================
-
-/**
- * Only routes that already exist should
- * be enabled.
- *
- * Future modules are displayed as
- * unavailable until they are implemented.
- */
-
-const navigationSections: NavigationSection[] = [
-  {
-    title: "MAIN MENU",
-
-    items: [
-      {
-        label: "Dashboard",
-        icon: "dashboard",
-        path: "dashboard",
-        available: true,
-      },
-
-      {
-        label: "Academic Years",
-        icon: "academic",
-        path: "academics/years",
-        available: true,
-        allowedRoles: [
-          "Proprietor",
-          "School Administrator",
-          "Head Teacher",
-          "Teacher",
-        ],
-      },
-
-      {
-        label: "Students",
-        icon: "students",
-        available: false,
-      },
-
-      {
-        label: "Attendance",
-        icon: "attendance",
-        available: false,
-      },
-
-      {
-        label: "Examinations",
-        icon: "exams",
-        available: false,
-      },
-    ],
-  },
-
-  {
-    title: "MANAGEMENT",
-
-    items: [
-      {
-        label: "Administration",
-        icon: "staff",
-        path: "admin",
-        available: true,
-        allowedRoles: [
-          "Proprietor",
-          "School Administrator",
-        ],
-      },
-
-      {
-        label: "Finance",
-        icon: "finance",
-        available: false,
-        allowedRoles: [
-          "Proprietor",
-          "School Administrator",
-          "Bursar",
-        ],
-      },
-
-      {
-        label: "Staff Management",
-        icon: "staff",
-        available: false,
-        allowedRoles: [
-          "Proprietor",
-          "School Administrator",
-        ],
-      },
-
-      {
-        label: "Library",
-        icon: "library",
-        available: false,
-      },
-
-      {
-        label: "Reports & Analytics",
-        icon: "reports",
-        available: false,
-      },
-    ],
-  },
-
-  {
-    title: "CONFIGURATION",
-
-    items: [
-      {
-        label: "Settings",
-        icon: "settings",
-        available: false,
-        allowedRoles: [
-          "Proprietor",
-          "School Administrator",
-        ],
-      },
-    ],
-  },
-];
-
 
 // =====================================================
 // NAVIGATION ICON COMPONENT
@@ -330,6 +182,49 @@ function NavigationIcon({
       </>
     ),
 
+    message: (
+      <>
+        <path d="M4 5h16v11H9l-5 4z" />
+        <path d="M8 9h8" />
+        <path d="M8 12h5" />
+      </>
+    ),
+
+    bus: (
+      <>
+        <rect x="4" y="4" width="16" height="13" rx="2" />
+        <path d="M4 11h16" />
+        <circle cx="8" cy="20" r="1.5" />
+        <circle cx="16" cy="20" r="1.5" />
+      </>
+    ),
+
+    bed: (
+      <>
+        <path d="M3 18V6" />
+        <path d="M3 14h18v4" />
+        <path d="M21 14v-2a3 3 0 0 0-3-3h-7v5" />
+        <circle cx="7" cy="11" r="1.5" />
+      </>
+    ),
+
+    clock: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l3 2" />
+      </>
+    ),
+
+    idcard: (
+      <>
+        <rect x="3" y="5" width="18" height="14" rx="2" />
+        <circle cx="9" cy="11" r="2" />
+        <path d="M6 16c.6-1.6 5.4-1.6 6 0" />
+        <path d="M15 10h3" />
+        <path d="M15 14h3" />
+      </>
+    ),
+
     switch: (
       <>
         <path d="M4 7h16" />
@@ -368,7 +263,7 @@ interface SidebarContentProps {
   school: SchoolInformation;
   collapsed: boolean;
   pathname: string;
-  roles: string[];
+  sections: NavigationSection[];
   onNavigate?: () => void;
 }
 
@@ -376,7 +271,7 @@ function SidebarContent({
   school,
   collapsed,
   pathname,
-  roles,
+  sections,
   onNavigate,
 }: SidebarContentProps) {
   const schoolBasePath =
@@ -423,7 +318,7 @@ function SidebarContent({
         className="flex-1 space-y-7 overflow-y-auto px-3 py-6"
       >
 
-        {navigationSections.map((section) => (
+        {sections.map((section) => (
 
           <div key={section.title}>
 
@@ -438,15 +333,6 @@ function SidebarContent({
             <div className="space-y-1">
 
               {section.items
-                .filter((item) => {
-                  if (!item.allowedRoles) {
-                    return true;
-                  }
-
-                  return item.allowedRoles.some(
-                    (role) => roles.includes(role)
-                  );
-                })
                 .map((item) => {
 
                 const href =
@@ -589,8 +475,12 @@ export default function DashboardLayout({
   school,
   user,
   roles,
+  permissions = [],
+  isAdmin = false,
   children,
 }: DashboardLayoutProps) {
+
+  const sections = buildNavigation(permissions, isAdmin);
 
   // ===================================================
   // ROUTING
@@ -709,7 +599,7 @@ export default function DashboardLayout({
           school={school}
           collapsed={sidebarCollapsed}
           pathname={pathname}
-          roles={roles}
+          sections={sections}
         />
 
       </aside>
@@ -757,7 +647,7 @@ export default function DashboardLayout({
               school={school}
               collapsed={false}
               pathname={pathname}
-              roles={roles}
+              sections={sections}
               onNavigate={() =>
                 setMobileSidebarOpen(false)
               }
@@ -918,6 +808,8 @@ export default function DashboardLayout({
                 >
                   {userInitial}
                 </div>
+
+                <SignOutButton />
 
               </div>
 

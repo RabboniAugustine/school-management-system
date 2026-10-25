@@ -1,4 +1,5 @@
 import Link from "next/link";
+import AuthRedirect from "@/components/auth/AuthRedirect";
 
 const features = [
   "Students, staff, classes and attendance",
@@ -12,6 +13,7 @@ const features = [
 export default function Home() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-6 py-16">
+      <AuthRedirect />
       <div className="w-full max-w-2xl text-center">
         <p className="text-sm font-semibold uppercase tracking-widest text-blue-800">School Management System</p>
         <h1 className="mt-3 text-4xl font-bold text-slate-900">Run your whole school in one place</h1>

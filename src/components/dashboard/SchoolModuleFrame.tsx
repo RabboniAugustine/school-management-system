@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
-import ModuleLinks from "@/components/dashboard/ModuleLinks";
+import { isAdminRole } from "@/lib/navigation";
 import OfflineStatus from "@/components/offline/OfflineStatus";
 
 export default function SchoolModuleFrame({
@@ -15,10 +15,9 @@ export default function SchoolModuleFrame({
   children: ReactNode;
 }) {
   return (
-    <DashboardLayout school={school} user={{ email: userEmail }} roles={roles}>
+    <DashboardLayout school={school} user={{ email: userEmail }} roles={roles} permissions={[...permissions]} isAdmin={isAdminRole(roles)}>
       <div className="space-y-7">
         <OfflineStatus owner={userEmail} />
-        <ModuleLinks slug={school.slug} permissions={permissions} />
         <header>
           <h1 className="text-3xl font-bold text-slate-900">{title}</h1>
           <p className="mt-2 text-slate-600">{subtitle}</p>
